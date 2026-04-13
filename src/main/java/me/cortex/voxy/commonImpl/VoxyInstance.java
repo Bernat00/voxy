@@ -217,6 +217,7 @@ public abstract class VoxyInstance {
     public void shutdown() {
         Logger.info("Shutting down voxy instance");
         this.isRunning = false;
+        this.worldCleaner.interrupt();
         try {
             this.worldCleaner.join();
         } catch (InterruptedException e) {
@@ -235,18 +236,22 @@ public abstract class VoxyInstance {
         try {this.ingestService.shutdown();} catch (Exception e) {Logger.error(e);}
         try {this.savingService.shutdown();} catch (Exception e) {Logger.error(e);}
 
-
-        long stamp = this.activeWorldLock.writeLock();
-
+        // Wait for worlds to become unused WITHOUT holding the write lock.
+        // Sleeping inside the write lock would block the server tick thread on readLock()
+        // indefinitely, causing the server watchdog to detect a hung tick.
         if (!this.activeWorlds.isEmpty()) {
             boolean printedNotice = false;
-            for (var world : this.activeWorlds.values()) {
-                if (world.isWorldUsed()) {
+            long readStamp = this.activeWorldLock.readLock();
+            List<WorldEngine> worldsList = new ArrayList<>(this.activeWorlds.values());
+            this.activeWorldLock.unlockRead(readStamp);
+
+            for (var world : worldsList) {
+                if (world.isLive() && world.isWorldUsed()) {
                     if (!printedNotice) {
                         printedNotice = true;
                         Logger.error("Not all worlds shutdown, force closing worlds");
                     }
-                    while (world.isWorldUsed()) {
+                    while (world.isLive() && world.isWorldUsed()) {
                         try {
                             //noinspection BusyWait
                             Thread.sleep(10);
@@ -255,6 +260,13 @@ public abstract class VoxyInstance {
                         }
                     }
                 }
+            }
+        }
+
+        long stamp = this.activeWorldLock.writeLock();
+
+        if (!this.activeWorlds.isEmpty()) {
+            for (var world : this.activeWorlds.values()) {
                 //Free the world
                 world.free();
             }
