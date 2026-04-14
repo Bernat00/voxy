@@ -729,7 +729,18 @@ public class ModelFactory {
     }
 
     private static BlockColor getColourProvider(Block block) {
-        return Minecraft.getInstance().getBlockColors().blockColors.byId(BuiltInRegistries.BLOCK.getId(block));
+        BlockState defaultState = block.defaultBlockState();
+        var blockColors = Minecraft.getInstance().getBlockColors();
+        int color;
+        try {
+            color = blockColors.getColor(defaultState, null, BlockPos.ZERO, 0);
+        } catch (Exception e) {
+            return null;
+        }
+        if (color != 0) {
+            return (state, world, pos, tintIndex) -> blockColors.getColor(state, world, pos, tintIndex);
+        }
+        return null;
     }
 
     //TODO: add a method to detect biome dependent colours (can do by detecting if getColor is ever called)
