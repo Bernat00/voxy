@@ -8,8 +8,6 @@ import me.cortex.voxy.common.util.Pair;
 import me.cortex.voxy.common.world.other.Mapper.BiomeEntry;
 import me.cortex.voxy.common.world.other.Mapper.StateEntry;
 import net.minecraft.SharedConstants;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.core.Holder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
@@ -363,7 +361,10 @@ public class Mapper {
             if (state.getBlock() instanceof LeavesBlock) {
                 this.opacity = 15;
             } else {
-                this.opacity = state.getLightBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+                //canOcclude() is a cached field on BlockState — no virtual dispatch,
+                //so it is safe to call from a dedicated server where client-only
+                //classes (like Minecraft) must never be loaded.
+                this.opacity = state.canOcclude() ? 15 : 0;
             }
         }
 
